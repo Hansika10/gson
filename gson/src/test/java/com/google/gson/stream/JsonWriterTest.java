@@ -116,7 +116,69 @@ public final class JsonWriterTest {
   public void testInvalidTopLevelTypes() throws IOException {
     StringWriter stringWriter = new StringWriter();
     JsonWriter jsonWriter = new JsonWriter(stringWriter);
-    assertThrows(IllegalStateException.class, () -> jsonWriter.name("hello"));
+    IllegalStateException e = assertThrows(IllegalStateException.class, () -> jsonWriter.name("hello"));
+    assertThat(e).hasMessageThat().isEqualTo("Please begin an object before writing a name.");
+  }
+
+  @Test
+  public void testNameAfterTopLevelValue() throws IOException {
+    StringWriter stringWriter = new StringWriter();
+    JsonWriter jsonWriter = new JsonWriter(stringWriter);
+    jsonWriter.value(1);
+    IllegalStateException e = assertThrows(IllegalStateException.class, () -> jsonWriter.name("hello"));
+    assertThat(e).hasMessageThat().isEqualTo("Please begin an object before writing a name.");
+    jsonWriter.close();
+    assertThat(stringWriter.toString()).isEqualTo("1");
+  }
+
+  @Test
+  public void testNameInArray() throws IOException {
+    StringWriter stringWriter = new StringWriter();
+    JsonWriter jsonWriter = new JsonWriter(stringWriter);
+
+    jsonWriter.beginArray();
+    IllegalStateException e = assertThrows(IllegalStateException.class, () -> jsonWriter.name("a"));
+    assertThat(e).hasMessageThat().isEqualTo("Please begin an object before writing a name.");
+
+    jsonWriter.value(1);
+    e = assertThrows(IllegalStateException.class, () -> jsonWriter.name("a"));
+    assertThat(e).hasMessageThat().isEqualTo("Please begin an object before writing a name.");
+
+    jsonWriter.endArray();
+    jsonWriter.close();
+    assertThat(stringWriter.toString()).isEqualTo("[1]");
+  }
+
+  @Test
+  public void testNameInArrayNestedInObject() throws IOException {
+    StringWriter stringWriter = new StringWriter();
+    JsonWriter jsonWriter = new JsonWriter(stringWriter);
+
+    jsonWriter.beginObject();
+    jsonWriter.name("a").beginArray();
+    IllegalStateException e = assertThrows(IllegalStateException.class, () -> jsonWriter.name("b"));
+    assertThat(e).hasMessageThat().isEqualTo("Please begin an object before writing a name.");
+
+    jsonWriter.beginObject().name("c").value(true).endObject();
+    e = assertThrows(IllegalStateException.class, () -> jsonWriter.name("d"));
+    assertThat(e).hasMessageThat().isEqualTo("Please begin an object before writing a name.");
+
+    jsonWriter.endArray();
+    jsonWriter.name("e").value(2);
+    jsonWriter.endObject();
+    jsonWriter.close();
+    assertThat(stringWriter.toString()).isEqualTo("{\"a\":[{\"c\":true}],\"e\":2}");
+  }
+
+  @Test
+  public void testNameInObject() throws IOException {
+    StringWriter stringWriter = new StringWriter();
+    JsonWriter jsonWriter = new JsonWriter(stringWriter);
+    jsonWriter.beginObject();
+    jsonWriter.name("name").value("value");
+    jsonWriter.endObject();
+    jsonWriter.close();
+    assertThat(stringWriter.toString()).isEqualTo("{\"name\":\"value\"}");
   }
 
   @Test
@@ -242,6 +304,13 @@ public final class JsonWriterTest {
       fail();
     } catch (NullPointerException expected) {
     }
+  }
+
+  @Test
+  public void testNullNameOutsideObject() {
+    JsonWriter jsonWriter = new JsonWriter(new StringWriter());
+    NullPointerException e = assertThrows(NullPointerException.class, () -> jsonWriter.name(null));
+    assertThat(e).hasMessageThat().isEqualTo("name == null");
   }
 
   @Test

@@ -17,6 +17,7 @@
 package com.google.gson.internal.bind;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 import com.google.gson.JsonElement;
@@ -110,6 +111,82 @@ public final class JsonTreeWriterTest {
     } catch (IOException expected) {
       assertThat(expected).hasMessageThat().isEqualTo("Incomplete document");
     }
+  }
+
+  @Test
+  public void testNameAsTopLevelValue() throws IOException {
+    JsonTreeWriter writer = new JsonTreeWriter();
+    IllegalStateException e = assertThrows(IllegalStateException.class, () -> writer.name("hello"));
+    assertThat(e).hasMessageThat().isEqualTo("Did not expect a name");
+
+    writer.value(12);
+    e = assertThrows(IllegalStateException.class, () -> writer.name("hello"));
+    assertThat(e).hasMessageThat().isEqualTo("Did not expect a name");
+    assertThat(writer.get().toString()).isEqualTo("12");
+
+    writer.close();
+    e = assertThrows(IllegalStateException.class, () -> writer.name("hello"));
+    assertThat(e).hasMessageThat().isEqualTo("Please begin an object before writing a name.");
+  }
+
+  @Test
+  public void testNameInArray() throws IOException {
+    JsonTreeWriter writer = new JsonTreeWriter();
+
+    writer.beginArray();
+    IllegalStateException e = assertThrows(IllegalStateException.class, () -> writer.name("a"));
+    assertThat(e).hasMessageThat().isEqualTo("Please begin an object before writing a name.");
+
+    writer.value(1);
+    e = assertThrows(IllegalStateException.class, () -> writer.name("a"));
+    assertThat(e).hasMessageThat().isEqualTo("Please begin an object before writing a name.");
+
+    writer.endArray();
+    assertThat(writer.get().toString()).isEqualTo("[1]");
+  }
+
+  @Test
+  public void testNameInArrayNestedInObject() throws IOException {
+    JsonTreeWriter writer = new JsonTreeWriter();
+
+    writer.beginObject();
+    writer.name("a").beginArray();
+    IllegalStateException e = assertThrows(IllegalStateException.class, () -> writer.name("b"));
+    assertThat(e).hasMessageThat().isEqualTo("Please begin an object before writing a name.");
+
+    writer.beginObject().name("c").value(true).endObject();
+    e = assertThrows(IllegalStateException.class, () -> writer.name("d"));
+    assertThat(e).hasMessageThat().isEqualTo("Please begin an object before writing a name.");
+
+    writer.endArray();
+    writer.name("e").value(2);
+    writer.endObject();
+    assertThat(writer.get().toString()).isEqualTo("{\"a\":[{\"c\":true}],\"e\":2}");
+  }
+
+  @Test
+  public void testTwoNames() throws IOException {
+    JsonTreeWriter writer = new JsonTreeWriter();
+    writer.beginObject();
+    writer.name("a");
+    IllegalStateException e = assertThrows(IllegalStateException.class, () -> writer.name("a"));
+    assertThat(e).hasMessageThat().isEqualTo("Did not expect a name");
+
+    writer.value(1);
+    writer.name("b").value(2);
+    writer.endObject();
+    assertThat(writer.get().toString()).isEqualTo("{\"a\":1,\"b\":2}");
+  }
+
+  @Test
+  public void testNullName() throws IOException {
+    JsonTreeWriter writer = new JsonTreeWriter();
+    NullPointerException e = assertThrows(NullPointerException.class, () -> writer.name(null));
+    assertThat(e).hasMessageThat().isEqualTo("name == null");
+
+    writer.beginObject();
+    e = assertThrows(NullPointerException.class, () -> writer.name(null));
+    assertThat(e).hasMessageThat().isEqualTo("name == null");
   }
 
   @Test
